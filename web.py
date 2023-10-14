@@ -1,6 +1,9 @@
-from flask import Flask , request, jsonify
+from flask import Flask, request, jsonify
 import sqlite3
 import telebot
+import base64
+from io import BytesIO
+
 telegram_bot = telebot.TeleBot("XXXXXXXXX:XXXXXXXXXXXXXXXX")
 
 app = Flask(__name__)
@@ -41,22 +44,27 @@ def report_data():
         task = request.json.get("task")
         status = request.json.get("status")
         payload = request.json.get("payload")
-        db_cursor.execute("SELECT user_id FROM client WHERE user=? and device = ?", (user, device))
-        id = db_cursor.fetchall()[0][0]
-        db_cursor.execute("SELECT type FROM tasks WHERE id=?", (task))
-        task_name = db_cursor.fetchall()[0][0]
-        print("用户" )
-        print(id)
-        print("任务")
-        print(task_name)
-        print(status)
-        text="任务"+str(task_name)+" "+str(status)+",详细信息： "+payload
-        if payload :
-            print (payload)
-        
-        telegram_bot.send_message(chat_id=id, text=text)
+        db_cursor.execute("SELECT client.user_id, tasks.id, tasks.type FROM tasks INNER JOIN client ON client.user_id = tasks.user_id WHERE user=? and device = ? and tasks.id = ?", (user, device, task))
+        data = db_cursor.fetchall()[0]
+        user_id = data[0]
+        tasks_id = data[1]
+        tasks_type = data[2]
+        try:
+            image_data = base64.b64decode(payload)
+            # 发送图像给用户
+            telegram_bot.send_photo(chat_id=user_id, photo=BytesIO(image_data))
+            return "ok"
+        except:
+            print("payload不是图像")
+        text = "编号"+str(tasks_id)+"任务"+str(tasks_type)+"执行"+str(status)
+        if payload:
+            text += ",详细信息： "+payload
+        try:
+            telegram_bot.send_message(chat_id=user_id, text=str(text))
+        except:
+            print("消息发送失败")
 
-        return jsonify(id)
+        return jsonify(task)
     except Exception as e:
         return jsonify({'error': str(e)})
     
