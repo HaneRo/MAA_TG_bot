@@ -5,6 +5,11 @@ import threading
 from flask import Flask, request, jsonify
 import base64
 from io import BytesIO
+import time
+import sys
+import os
+
+sys.stdout = open(os.devnull, "w") #使用pyinstaller  -w  时需重定向标准输出
 
 TOKEN = 'XXXXXXXXX:XXXXXXXXXXXXXXXX'  # 替换为从 BotFather 获取的你的 TOKEN
 
@@ -99,12 +104,29 @@ def report_data():
 
 
 def start_telebot():
-    bot.polling()
-    print("Telebot started...")
+    while True:
+        try:
+            # 启动Telebot
+            bot.polling()
+        except Exception as e:
+            # 处理连接错误
+            print(f"连接错误: {e}")
+            # 等待一段时间，然后重试连接
+            time.sleep(10)
 
+def start_flask():
+    while True:
+        try:
+            # 启动Flask
+            web.run(debug=False, threaded=True, host='0.0.0.0',port=5000, ssl_context=('server.crt', 'server.key'))
+        except Exception as e:
+            # 处理连接错误
+            print(f"Flask错误: {e}")
+            # 等待一段时间，然后重试连接
+            time.sleep(10)
 
 if __name__ == '__main__':
     # 使用多线程同时运行 Telebot 和 Flask
     thread_telebot = threading.Thread(target=start_telebot)
     thread_telebot.start()
-    web.run(debug=False, threaded=True, host='0.0.0.0',port=5000, ssl_context=('server.crt', 'server.key'))
+    start_flask()
