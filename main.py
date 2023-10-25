@@ -16,6 +16,8 @@ TOKEN = 'XXXXXXXXX:XXXXXXXXXXXXXXXX'  # 替换为从 BotFather 获取的你的 T
 ro_conn = sqlite3.connect('maa_tg.db', check_same_thread=False)
 ro_cursor = ro_conn.cursor()
 
+help = "/start 添加用户ID \n/user XXXXXX 绑定MAA用户标识符 \n/device YYYYYY 绑定MAA设备标识符 \n/help 显示帮助 \n/LinkStart - 一键开始 \n/CaptureImage - 截图\n/CaptureImageNow - 立刻截图\n/LinkStart-WakeUp - 开始唤醒\n/LinkStart-Combat - 刷理智\n/LinkStart-Recruiting - 公开招募\n/LinkStart-Mall - 获取信用及购物\n/LinkStart-Mission - 领取奖励\n/LinkStart-AutoRoguelike - 肉鸽\n具体参考 https://maa.plus/docs/3.8-%E8%BF%9C%E7%A8%8B%E6%8E%A7%E5%88%B6%E5%8D%8F%E8%AE%AE.html "
+
 bot = telebot.TeleBot(TOKEN)
 # 处理 / 开头的消息
 @bot.message_handler(content_types=["text"], func=lambda message: True, regexp="^/")
@@ -26,17 +28,19 @@ def received_command(message):
     params = " ".join(string[1:]) if len(string) > 1 else None
     current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
-    conn = sqlite3.connect('maa_tg.db')
+    conn = sqlite3.connect('maa_tg.db', check_same_thread=False)
     cursor = conn.cursor()
     if command == "start":
         cursor.execute('INSERT OR IGNORE  INTO client (user_id, user, device) VALUES (?, ?, ?)', (user_id, "NULL", "NULL"))
-        bot.reply_to(message, f'欢迎使用bot.')
+        bot.reply_to(message, f'欢迎使用bot.' + help)
     elif command == "user":
         cursor.execute('UPDATE client SET user = ? WHERE user_id = ?', (params, user_id))
         bot.reply_to(message, f'用户标识符设置为 {params} .')
     elif command == "device":
         cursor.execute('UPDATE client SET device = ? WHERE user_id = ?', (params, user_id))
         bot.reply_to(message, f'设备标识符设置为 {params} .')
+    elif command == "help":
+        bot.reply_to(message, help)
     else:
         cursor.execute('INSERT INTO tasks (type, params, user_id, time) VALUES (?, ?, ?, ?)',
                        (command, params, user_id, current_time))
@@ -82,6 +86,12 @@ def report_data():
         user_id = data[0]
         tasks_id = data[1]
         tasks_type = data[2]
+        if data:
+            del_conn = sqlite3.connect('maa_tg.db', check_same_thread=False)
+            del_cursor = del_conn.cursor()
+            del_cursor.execute("DELETE FROM tasks WHERE tasks.id = ? and user_id = ?", (task,user_id))
+            del_conn.commit()
+            del_conn.close()
         try:
             image_data = base64.b64decode(payload)
             # 发送图像给用户
