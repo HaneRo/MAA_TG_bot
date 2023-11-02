@@ -1,6 +1,6 @@
 import telebot
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timedelta
 import threading
 from flask import Flask, request, jsonify
 import base64
@@ -16,7 +16,7 @@ TOKEN = 'XXXXXXXXX:XXXXXXXXXXXXXXXX'  # 替换为从 BotFather 获取的你的 T
 ro_conn = sqlite3.connect('maa_tg.db', check_same_thread=False)
 ro_cursor = ro_conn.cursor()
 
-help = "/start 添加用户ID \n/user XXXXXX 绑定MAA用户标识符 \n/device YYYYYY 绑定MAA设备标识符 \n/help 显示帮助 \n/LinkStart - 一键开始 \n/CaptureImage - 截图\n/CaptureImageNow - 立刻截图\n/LinkStart-WakeUp - 开始唤醒\n/LinkStart-Combat - 刷理智\n/LinkStart-Recruiting - 公开招募\n/LinkStart-Mall - 获取信用及购物\n/LinkStart-Mission - 领取奖励\n/LinkStart-AutoRoguelike - 肉鸽\n具体参考 https://maa.plus/docs/3.8-%E8%BF%9C%E7%A8%8B%E6%8E%A7%E5%88%B6%E5%8D%8F%E8%AE%AE.html "
+help = "\n/user XXXXXX 绑定MAA用户标识符 \n/device YYYYYY 绑定MAA设备标识符 \n/help 显示帮助 \n/LinkStart - 一键开始 \n/CaptureImage - 截图\n/CaptureImageNow - 立刻截图\n/LinkStart-WakeUp - 开始唤醒\n/LinkStart-Combat - 刷理智\n/LinkStart-Recruiting - 公开招募\n/LinkStart-Mall - 获取信用及购物\n/LinkStart-Mission - 领取奖励\n/LinkStart-AutoRoguelike - 肉鸽\n具体参考 https://maa.plus/docs/3.8-%E8%BF%9C%E7%A8%8B%E6%8E%A7%E5%88%B6%E5%8D%8F%E8%AE%AE.html "
 
 bot = telebot.TeleBot(TOKEN)
 # 处理 / 开头的消息
@@ -112,6 +112,38 @@ def report_data():
     except Exception as e:
         return jsonify({'error': str(e)})
 
+def db():
+    conn = sqlite3.connect('maa_tg.db', check_same_thread=False)
+    cursor = conn.cursor()
+
+    # 创建一个名为client的表
+    cursor.execute('''CREATE TABLE IF NOT EXISTS client
+                    (user_id INTEGER PRIMARY KEY, user TEXT, device TEXT)''')
+
+    # 创建任务表
+    cursor.execute('''CREATE TABLE IF NOT EXISTS tasks
+                    (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    type TEXT,
+                    params TEXT,
+                    user_id INTEGER,
+                    time DATETIME)''')
+
+    # 提交更改并关闭连接
+    conn.commit()
+    conn.close()
+
+def db_clean(hours):
+    conn = sqlite3.connect('maa_tg.db')
+    cursor = conn.cursor()
+
+    time_str = (datetime.now() - timedelta(hours=hours)).strftime('%Y-%m-%d %H:%M:%S')
+
+    # 执行删除操作
+    cursor.execute("DELETE FROM tasks WHERE time < ?", (time_str,))
+
+    # 提交更改并关闭连接
+    conn.commit()
+    conn.close()
 
 def start_telebot():
     while True:
@@ -135,8 +167,21 @@ def start_flask():
             # 等待一段时间，然后重试连接
             time.sleep(10)
 
+def start_db_clean():
+    while True:
+        try:
+            db_clean(3)
+        except Exception as e:
+            # 处理连接错误
+            print(f"清理数据库错误: {e}")
+            # 等待一段时间，然后重试连接
+            time.sleep(86400)
+
 if __name__ == '__main__':
-    # 使用多线程同时运行 Telebot 和 Flask
+    db()
+    # 使用多线程同时运行 Telebot 、 定期清除数据库 和 Flask 
     thread_telebot = threading.Thread(target=start_telebot)
     thread_telebot.start()
+    thread_db_clean = threading.Thread(target=start_db_clean)
+    thread_db_clean.start()
     start_flask()
